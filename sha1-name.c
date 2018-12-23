@@ -1001,8 +1001,20 @@ static int peel_onion(const char *name, int len, struct object_id *oid,
 	 * "ref^{commit}".  "commit^{tree}" could be used to find the
 	 * top-level tree of the given commit.
 	 */
-	if (len < 4 || name[len-1] != '}')
+	if (len < 4)
 		return -1;
+
+	/* Check for names in ref:path format in case the path includes
+	 * brackets (e.g. ref^{type}:foo/{{bar}}).
+	 */
+	for (sp = name; sp < name + len; sp++) {
+		if (*sp == ':')
+			return -1;
+	}
+
+	if (name[len-1] != '}') {
+		return -1;
+	}
 
 	for (sp = name + len - 1; name <= sp; sp--) {
 		int ch = *sp;
