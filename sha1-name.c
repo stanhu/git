@@ -989,7 +989,7 @@ static int peel_onion(const char *name, int len, struct object_id *oid,
 		      unsigned lookup_flags)
 {
 	struct object_id outer;
-	const char *sp;
+	const char *sp, *end;
 	unsigned int expected_type = 0;
 	struct object *o;
 
@@ -1004,18 +1004,6 @@ static int peel_onion(const char *name, int len, struct object_id *oid,
 	if (len < 4)
 		return -1;
 
-	/* Check for names in ref:path format in case the path includes
-	 * brackets (e.g. ref^{type}:foo/{{bar}}).
-	 */
-	for (sp = name; sp < name + len; sp++) {
-		if (*sp == ':')
-			return -1;
-	}
-
-	if (name[len-1] != '}') {
-		return -1;
-	}
-
 	for (sp = name + len - 1; name <= sp; sp--) {
 		int ch = *sp;
 		if (ch == '{' && name < sp && sp[-1] == '^')
@@ -1025,21 +1013,28 @@ static int peel_onion(const char *name, int len, struct object_id *oid,
 		return -1;
 
 	sp++; /* beginning of type name, or closing brace for empty */
-	if (starts_with(sp, "commit}"))
+
+	if (skip_prefix(sp, "commit}", &end))
 		expected_type = OBJ_COMMIT;
-	else if (starts_with(sp, "tag}"))
+	else if (skip_prefix(sp, "tag}", &end))
 		expected_type = OBJ_TAG;
-	else if (starts_with(sp, "tree}"))
+	else if (skip_prefix(sp, "tree}", &end))
 		expected_type = OBJ_TREE;
-	else if (starts_with(sp, "blob}"))
+	else if (skip_prefix(sp, "blob}", &end))
 		expected_type = OBJ_BLOB;
-	else if (starts_with(sp, "object}"))
+	else if (skip_prefix(sp, "object}", &end))
 		expected_type = OBJ_ANY;
-	else if (sp[0] == '}')
+	else if (sp[0] == '}') {
 		expected_type = OBJ_NONE;
-	else if (sp[0] == '/')
+		end = sp + 1;
+	} else if (sp[0] == '/') {
 		expected_type = OBJ_COMMIT;
+		end = name + len;
+	}
 	else
+		return -1;
+
+	if (end != name + len)
 		return -1;
 
 	lookup_flags &= ~GET_OID_DISAMBIGUATORS;
